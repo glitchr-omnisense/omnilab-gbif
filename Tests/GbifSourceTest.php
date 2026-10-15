@@ -212,7 +212,7 @@ final class GbifSourceTest extends TestCase
         self::assertSame('2025-01-03T17:38:00+02:00', $lion->time->format(\DATE_ATOM), 'the date as given, at the offset of its eventTime');
         self::assertEquals(new Point(-24.205889, 31.287023), $lion->place);
         self::assertSame(['gbif:7KGW9', 'gbif:5219411'], $lion->related('taxon')->keys(), 'what it is of: related, its key and its legacy number');
-        self::assertSame([], $lion->identifiers->keys(), 'nothing else names the record');
+        self::assertSame(['inaturalist.observation:257284120'], $lion->identifiers->keys(), 'an iNaturalist observation shared with GBIF: the same record, which the Collector can follow');
         self::assertSame(['Panthera leo melanochaita', 'Panthera leo melanochaita (C. E. H. Smith, 1858)', 'subspecies', 'Animalia', 'Felidae', 'Panthera'], [$lion->value('taxon_name'), $lion->value('scientific_name'), $lion->value('taxon_rank'), $lion->value('kingdom'), $lion->value('family'), $lion->value('genus')]);
         self::assertSame(['human observation', '2025-01-03T17:38', 'ZA', 'Mpumalanga', 'iNaturalist research-grade observations'], [$lion->value('basis_of_record'), $lion->value('event_date'), $lion->value('country_code'), $lion->value('state_province'), $lion->value('dataset')]);
         self::assertSame('30090 m', (string) $lion->property('coordinate_uncertainty'));

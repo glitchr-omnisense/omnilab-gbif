@@ -114,8 +114,10 @@ An occurrence holds: `id` (`gbif.occurrence:5007681734`), `label` (the name, the
 `time` (the event date as GBIF interprets it: its start for an interval, the first day of a year or
 a month given alone, at the offset of its `eventTime` when the date has none, else UTC), `place`
 (its coordinates, and its elevation when given), `url` (its GBIF page), `image` (its first still
-image), `related` (`taxon`: the checklist's key for what it was identified as and the legacy
-number; `accepted` when that is a synonym), and these properties:
+image), `identifiers` (the iNaturalist observation it is, when iNaturalist published it: its
+`occurrenceID` is the observation's page - `inaturalist.observation:257284120` -, which the
+`Collector` follows into omnilab/inaturalist), `related` (`taxon`: the checklist's key for what it
+was identified as and the legacy number; `accepted` when that is a synonym), and these properties:
 
 | Key | GBIF | Value |
 |---|---|---|

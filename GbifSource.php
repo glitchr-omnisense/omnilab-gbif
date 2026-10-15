@@ -347,12 +347,22 @@ final class GbifSource extends HttpSource
             image: $image,
             time: self::when($r['eventDate'] ?? null, $r['eventTime'] ?? null),
             place: $place,
+            // An iNaturalist observation shared with GBIF is the same record: its page is the publisher's id.
+            identifiers: Identifiers::of(self::inaturalist($r['occurrenceID'] ?? null)),
             source: 'gbif',
             related: array_filter([
                 'taxon' => \count($taxon) ? $taxon : null,
                 'accepted' => \count($acceptedTaxon) && $acceptedTaxon->keys() !== $taxon->keys() ? $acceptedTaxon : null,
             ]),
         );
+    }
+
+    /** The iNaturalist observation an occurrence is, when its publisher's id is the observation's page. */
+    private static function inaturalist(mixed $occurrenceId): ?Identifier
+    {
+        $identifier = \is_string($occurrenceId) && str_contains($occurrenceId, 'inaturalist.org/observations/') ? Identifier::parse($occurrenceId) : null;
+
+        return Scheme::INATURALIST_OBSERVATION === $identifier?->scheme ? $identifier : null;
     }
 
     /**

@@ -1,7 +1,7 @@
 {
     "name": "omnilab/gbif",
     "type": "library",
-    "description": "Omnilab GBIF: a taxon of GBIF's taxonomy (the Catalogue of Life eXtended Release since June 2026) by its key, its legacy GBIF Backbone number, its NCBI Taxonomy id or a scientific name GBIF matches - its name, authority, rank, status, IUCN Red List category, common name, publication and classification, its legacy number and NCBI id as cross-references, its parent as a related thing - and a search, through the GBIF API, no key needed.",
+    "description": "Omnilab GBIF: a taxon of GBIF's taxonomy (the Catalogue of Life eXtended Release since June 2026) by its key, its legacy GBIF Backbone number, its NCBI Taxonomy id or a scientific name GBIF matches - its name, authority, rank, status, IUCN Red List category, common name, publication and classification, its legacy number and NCBI id as cross-references, its parent as a related thing - a search, and the occurrences of a place and a period (by taxon, country, basis of record), each with its time and place and its taxon related, through the GBIF API, no key needed.",
     "keywords": [
         "science",
         "biodiversity",
@@ -9,6 +9,7 @@
         "gbif",
         "species",
         "catalogue-of-life",
+        "occurrences",
         "omnilab"
     ],
     "license": "MIT",

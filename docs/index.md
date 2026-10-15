@@ -53,6 +53,8 @@ the legacy number, then as above.
 | | an NCBI id (an `Identifier` of `ncbi.taxon`, `taxonomy:9689`) | the ENA record, then as a legacy number |
 | | a scientific name (`Panthera leo`; a synonym, `Felis leo`, gives its accepted taxon, the synonym among its synonyms) | match by `scientificName`, record, related |
 | `search()` | `Query::$text`: GBIF's search of the checklist's names, common names included; a domain other than taxonomy answers nothing | `v1/species/search?datasetKey=...&q=&limit=&offset=` |
+| `entity()` | an occurrence: `gbif.occurrence:5007681734`, `https://www.gbif.org/occurrence/5007681734` | `v1/occurrence/5007681734` |
+| `occurrences()` | an `OccurrenceQuery` (below) | `v1/occurrence/search?checklistKey=...&hasCoordinate=true&occurrenceStatus=PRESENT&eventDate=&limit=&offset=` with the place and the filters |
 
 A bare string of a key's shape is a key, digits a legacy number; anything else a name. A match is
 kept when GBIF says `EXACT`, `FUZZY` or `VARIANT`; a name it matches at a higher rank only is
@@ -85,17 +87,56 @@ taxon above it, by its key), or `accepted` for a synonym (whose classification i
 taxon's). A search result holds the name, authority, rank, status, the main ranks, its English
 common names (the `language` option) and its legacy number: `entity()` reads the rest.
 
+## Occurrences
+
+An occurrence is a record of an organism at a place and a time - observed (most, through
+iNaturalist and the bird atlases), collected (a museum's specimen), sampled, sequenced. GBIF holds
+3,981,411,127 (2026-10-15). `occurrences()` answers them in the core's fourth shape: a `Page` of
+entities, each with its time and its place.
+
+| `OccurrenceQuery` | GBIF |
+|---|---|
+| `place`: a `BBox` | `decimalLatitude=south,north&decimalLongitude=west,east`; a box across the antimeridian, which GBIF's ranges do not take, as two `geometry` polygons (GBIF ORs them) |
+| `place`: a `Point` and `radius` | `geoDistance=lat,lon,Rkm`; `radius_km` (10) when the query gives none |
+| `place`: none | the world |
+| `from`, `to` | `eventDate=from,to` in whole days (GBIF takes no time: a time stands for its day), `*` for an open end - always sent, so a record without a date is never answered |
+| `OccurrenceQuery::TAXON` | a key (`4CGXP`, `gbif:4CGXP`, an `Identifier`): `taxonKey`, which takes the subordinate taxa and the synonyms (the lion's subspecies); a legacy number (`5219404`): `taxonKey` without the checklist, read in the frozen Backbone (GBIF finds nothing under a legacy number in the COL XR); anything else, a scientific name: `scientificName`, matched in the checklist |
+| `OccurrenceQuery::COUNTRY` | ISO 3166-1 alpha-2, or a list: `country` |
+| `OccurrenceQuery::KIND` | the basis of record, or a list: `human_observation`, `preserved_specimen`, `machine_observation`, `material_sample`... (`basisOfRecord`) |
+| `limit`, `cursor` | `limit` (300 at most), `offset`; the last page GBIF answers ends 100,000 deep, a cursor past it is refused |
+| `sort` | refused: GBIF answers in its own order |
+
+Always asked: `hasCoordinate=true` (a place), `occurrenceStatus=PRESENT` (not a recorded absence),
+the checklist. The total is GBIF's `count`. A filter of another domain is refused before any call.
+
+An occurrence holds: `id` (`gbif.occurrence:5007681734`), `label` (the name, the country, the day:
+`Panthera leo melanochaita - South Africa, 2025-01-03`), `domain` taxonomy, `kind` `occurrence`,
+`time` (the event date as GBIF interprets it: its start for an interval, the first day of a year or
+a month given alone, at the offset of its `eventTime` when the date has none, else UTC), `place`
+(its coordinates, and its elevation when given), `url` (its GBIF page), `image` (its first still
+image), `related` (`taxon`: the checklist's key for what it was identified as and the legacy
+number; `accepted` when that is a synonym), and these properties:
+
+| Key | GBIF | Value |
+|---|---|---|
+| `taxon_name`, `scientific_name`, `taxon_rank` | the checklist's usage: canonical name, with its authority, rank | text |
+| `domain`, `kingdom`, `phylum`, `class`, `order`, `family`, `genus` | the checklist's classification | text |
+| `accepted_name` | the accepted usage, for a synonym | text |
+| `basis_of_record` | basisOfRecord: `human observation`, `preserved specimen`... | text |
+| `event_date` | eventDate as GBIF interprets it: its precision kept (`2025-01-03T17:38`, `2023-02-22`, an interval) | text |
+| `individual_count`, `sex`, `life_stage` | individualCount, sex, lifeStage | number, text |
+| `country`, `country_code`, `state_province`, `locality` | country, countryCode, stateProvince, locality (or the verbatim one) | text |
+| `coordinate_uncertainty`, `depth` | coordinateUncertaintyInMeters, depth | Quantity, m |
+| `recorded_by`, `identified_by` | recordedBy, identifiedBy | text |
+| `dataset`, `institution_code`, `occurrence_id`, `license` | datasetName, institutionCode, the publisher's id, the record's licence | text |
+| `information_withheld` | informationWithheld: a sensitive species' blurred place, for one | text |
+
+A page holds what the record holds: `entity($occurrence->id)` gives the same, in one call.
+
 ## What GBIF does not give here
 
 - No Wikidata item, no iNaturalist taxon: GBIF keeps neither as a checklist (Wikidata finds the
   taxon by its GBIF key, P14607, or its legacy number, P846; its item gives the iNaturalist id).
-- **Occurrences are left for later.** An occurrence is an observation at its own place and time;
-  the core's `Series` is one variable at one place over time, and `Query` has no place: neither
-  holds "the occurrences of a taxon in a box" without bending it. They would take either a new
-  capability (`Capability::OCCURRENCES`, entities of kind `occurrence` with `time` and `place`, a
-  query with a `BBox`) or the `Product` shape - a decision for the core, not taken here. GBIF's
-  occurrence search takes the new keys already (`occurrence/search?taxonKey=4CGXP&checklistKey=...`:
-  20 352 lions on 2026-10-15, 20 262 by the legacy number).
 - Not read: the vernacular names in other languages (but in a search), the descriptions,
   distributions, species profiles, media and references of the checklist, its children and
   synonyms (`v1/species/{key}/children`, `synonyms`), the other checklists' related usages but the
@@ -108,6 +149,20 @@ common names (the `language` option) and its legacy number: `entity()` reads the
 key first (no item carries `P14607=4CGXP` yet), then the number (`P846=5219404`: Q140).
 
 ## Verified, and not
+
+Occurrences, against the real service on 2026-10-15: the lions (4CGXP) placed and dated within
+100 km of Skukuza (-24.99, 31.59) in 2025, 412 in two pages of 300 (35 s the first time, GBIF's
+`geoDistance` slow; 3 s asked again), every one in 2025 and with its place; the first, an iNaturalist
+observation of *Panthera leo melanochaita* on 2025-01-03 at 17:38 (+02:00), its place blurred to
+30,090 m "to protect threatened taxon"; 513 in the box of the Kruger National Park by the name
+*Panthera leo*, 757 in South Africa; 16,675 in all, by the key and by the legacy number alike;
+317 preserved specimens, dated by the day; the 262 occurrences of January 2025 in a box across the
+antimeridian (170° to -170°, 20° S to 15° S), 221 east and 41 west of it, as the two halves count;
+seven within 10 km of Strasbourg from 2026-10-01 to 10-07 (a snail, a lizard, the Asian hornet, a
+mute swan...); an occurrence by its key (the same properties as in a page) and an unknown key
+(404); GBIF's limits: 300 a page (it answers 300 for 1000), offset and limit within 100,000
+(99,700 + 300 answered, 99,990 + 20 refused), no time in `eventDate` (400), no wrapping range of
+longitudes (400), no sort (a `sort` changes nothing).
 
 Against the real service on 2026-10-15, without a key: the lion by its key, its legacy number, its
 pages, its scientific name, its synonym *Felis leo* (matched to `CFSCR`, accepted `4CGXP`) and its

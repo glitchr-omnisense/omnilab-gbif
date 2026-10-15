@@ -7,11 +7,13 @@ use Omnilab\Exception\RateLimitedException;
 use Omnilab\Exception\UnavailableException;
 use Omnilab\Gbif\GbifSource;
 use Omnilab\Gbif\GbifSourceFactory;
+use Omnilab\Model\BBox;
 use Omnilab\Model\Domain;
 use Omnilab\Model\Identifier;
 use Omnilab\Model\Point;
 use Omnilab\Model\Scheme;
 use Omnilab\Source\Capability;
+use Omnilab\Source\OccurrenceQuery;
 use Omnilab\Source\Query;
 use Omnilab\Source\SeriesQuery;
 use Omnilab\Source\SourceInterface;
@@ -28,16 +30,23 @@ use Symfony\Component\HttpClient\Response\MockResponse;
  * an unknown key; the checklist's v1 records of 4CGXP and 5K5L6; the
  * records related to their legacy numbers in the ENA taxonomy (NCBI's ids);
  * the ENA record of NCBI's 9689; a search for "Panthera leo", two pages of
- * three.
+ * three. The occurrence search: the lions (4CGXP) placed and dated within
+ * 100 km of Skukuza (-24.99, 31.59) in 2025, two pages of three of the 412;
+ * two preserved specimens of lions, dated by the day; the record of the
+ * first occurrence (5007681734).
  */
 final class GbifSourceTest extends TestCase
 {
     /** @var list<string> */
     private array $calls = [];
 
+    /** @var list<string> the URLs asked, whole */
+    private array $urls = [];
+
     private function source(?MockResponse $response = null, array $options = []): SourceInterface
     {
         $http = new MockHttpClient(function (string $method, string $url) use ($response): MockResponse {
+            $this->urls[] = rawurldecode($url);
             $path = (string) parse_url($url, \PHP_URL_PATH);
             parse_str((string) parse_url($url, \PHP_URL_QUERY), $query);
             unset($query['checklistKey']);
@@ -67,11 +76,23 @@ final class GbifSourceTest extends TestCase
                 '/v1/species/5219404/related' === $path => 'related-5219404.json',
                 '/v1/species/5219413/related' === $path => 'related-5219413.json',
                 '/v1/species/search' === $path => isset($query['offset']) ? 'search-panthera-leo-2.json' : 'search-panthera-leo-1.json',
+                '/v1/occurrence/search' === $path => match (true) {
+                    isset($query['basisOfRecord']) => 'occurrences-specimens.json',
+                    '-24.99,31.59,100km' !== ($query['geoDistance'] ?? null) => null,
+                    isset($query['offset']) => 'occurrences-skukuza-2.json',
+                    default => 'occurrences-skukuza-1.json',
+                },
+                '/v1/occurrence/5007681734' === $path => 'occurrence-5007681734.json',
+                str_starts_with($path, '/v1/occurrence/') => 'not-found',
                 default => null,
             };
 
+            if ('not-found' === $fixture) {
+                return new MockResponse('', ['http_code' => 404]);
+            }
+
             return null === $fixture || !is_file(__DIR__.'/Fixtures/'.$fixture)
-                ? new MockResponse('{"offset":0,"limit":20,"endOfRecords":true,"results":[]}')
+                ? new MockResponse('{"offset":0,"limit":20,"endOfRecords":true,"count":0,"results":[]}')
                 : new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/'.$fixture));
         });
 
@@ -178,6 +199,98 @@ final class GbifSourceTest extends TestCase
         self::assertCount(2, $this->calls);
     }
 
+    public function testTheOccurrencesOfAPlaceAndAPeriod(): void
+    {
+        $page = $this->source()->occurrences(new OccurrenceQuery(new Point(-24.99, 31.59), new \DateTimeImmutable('2025-01-01'), new \DateTimeImmutable('2025-12-31'), [OccurrenceQuery::TAXON => '4CGXP'], radius: 100, limit: 3));
+
+        self::assertSame(['https://api.gbif.org/v1/occurrence/search?taxonKey=4CGXP&checklistKey='.GbifSource::CHECKLIST.'&hasCoordinate=true&occurrenceStatus=PRESENT&eventDate=2025-01-01,2025-12-31&limit=3&geoDistance=-24.99,31.59,100km'], $this->urls, 'one call, placed, present and dated only');
+        self::assertSame([3, 412, '3'], [\count($page), $page->total, $page->next]);
+        $lion = $page->first();
+        self::assertSame('gbif.occurrence:5007681734', $lion->id->key());
+        self::assertSame('Panthera leo melanochaita - South Africa, 2025-01-03', $lion->label);
+        self::assertSame([Domain::TAXONOMY, 'occurrence'], [$lion->domain, $lion->kind]);
+        self::assertSame('2025-01-03T17:38:00+02:00', $lion->time->format(\DATE_ATOM), 'the date as given, at the offset of its eventTime');
+        self::assertEquals(new Point(-24.205889, 31.287023), $lion->place);
+        self::assertSame(['gbif:7KGW9', 'gbif:5219411'], $lion->related('taxon')->keys(), 'what it is of: related, its key and its legacy number');
+        self::assertSame([], $lion->identifiers->keys(), 'nothing else names the record');
+        self::assertSame(['Panthera leo melanochaita', 'Panthera leo melanochaita (C. E. H. Smith, 1858)', 'subspecies', 'Animalia', 'Felidae', 'Panthera'], [$lion->value('taxon_name'), $lion->value('scientific_name'), $lion->value('taxon_rank'), $lion->value('kingdom'), $lion->value('family'), $lion->value('genus')]);
+        self::assertSame(['human observation', '2025-01-03T17:38', 'ZA', 'Mpumalanga', 'iNaturalist research-grade observations'], [$lion->value('basis_of_record'), $lion->value('event_date'), $lion->value('country_code'), $lion->value('state_province'), $lion->value('dataset')]);
+        self::assertSame('30090 m', (string) $lion->property('coordinate_uncertainty'));
+        self::assertSame('Coordinate uncertainty increased to 30090m to protect threatened taxon', $lion->value('information_withheld'));
+        self::assertSame('https://www.gbif.org/occurrence/5007681734', $lion->url);
+        self::assertSame('https://inaturalist-open-data.s3.amazonaws.com/photos/461450172/original.jpeg', $lion->image);
+        foreach ($page as $occurrence) {
+            self::assertTrue(null !== $occurrence->time && null !== $occurrence->place && (new Point(-24.99, 31.59))->around(100)->contains($occurrence->place), 'dated, placed, within 100 km');
+        }
+    }
+
+    public function testTheNextPageByOffset(): void
+    {
+        $source = $this->source();
+        $query = new OccurrenceQuery(new Point(-24.99, 31.59), new \DateTimeImmutable('2025-01-01'), new \DateTimeImmutable('2025-12-31'), [OccurrenceQuery::TAXON => Identifier::of(Scheme::GBIF, '4CGXP')], radius: 100, limit: 3);
+        $second = $source->occurrences($query->with(['cursor' => $source->occurrences($query)->next]));
+
+        self::assertStringEndsWith('&limit=3&offset=3&geoDistance=-24.99,31.59,100km', $this->urls[1]);
+        self::assertSame(['gbif.occurrence:5063147373', 'gbif.occurrence:5063158538', 'gbif.occurrence:5063617884'], array_map(static fn ($o) => $o->id->key(), $second->items));
+        self::assertSame('6', $second->next);
+        self::assertSame('2025-01-11T05:24:10+02:00', $second->first()->time->format(\DATE_ATOM));
+    }
+
+    public function testThePlaceThePeriodAndTheFiltersAsGbifTakesThem(): void
+    {
+        $source = $this->source(null, ['radius_km' => 25]);
+        $source->occurrences(new OccurrenceQuery(new BBox(30.8, -25.6, 32.1, -22.3), new \DateTimeImmutable('2025-01-01T12:00:00'), filters: [OccurrenceQuery::TAXON => 'Panthera leo', OccurrenceQuery::COUNTRY => ['za', 'MZ']], limit: 1000));
+        $source->occurrences(new OccurrenceQuery(new BBox(170, -20, -170, -15), to: new \DateTimeImmutable('2025-01-31'), filters: [OccurrenceQuery::TAXON => '5219404', OccurrenceQuery::KIND => 'machine observation']));
+        $source->occurrences(new OccurrenceQuery(new Point(48.5734, 7.7521)));
+
+        self::assertSame('https://api.gbif.org/v1/occurrence/search?scientificName=Panthera leo&checklistKey='.GbifSource::CHECKLIST.'&country=ZA&country=MZ&hasCoordinate=true&occurrenceStatus=PRESENT&eventDate=2025-01-01,*&limit=300&decimalLatitude=-25.6,-22.3&decimalLongitude=30.8,32.1', $this->urls[0], 'a name matched in the checklist; whole days, an open end; 300 a page at most');
+        self::assertSame('https://api.gbif.org/v1/occurrence/search?taxonKey=5219404&basisOfRecord=MACHINE_OBSERVATION&hasCoordinate=true&occurrenceStatus=PRESENT&eventDate=*,2025-01-31&limit=25&geometry=POLYGON((170 -20,180 -20,180 -15,170 -15,170 -20))&geometry=POLYGON((-180 -20,-170 -20,-170 -15,-180 -15,-180 -20))', $this->urls[1], 'a legacy number in the Backbone, no checklist named; a box across the antimeridian in two polygons');
+        self::assertStringEndsWith('&eventDate=*,*&limit=25&geoDistance=48.5734,7.7521,25km', $this->urls[2], 'the configured radius; dated, whenever');
+    }
+
+    public function testAnOccurrenceByItsKeyInOneCall(): void
+    {
+        $lion = $this->source()->entity('gbif.occurrence:5007681734');
+
+        self::assertSame(['v1/occurrence/5007681734'], $this->calls);
+        self::assertSame('Panthera leo melanochaita - South Africa, 2025-01-03', $lion?->label);
+        self::assertSame($this->source()->occurrences(new OccurrenceQuery(new Point(-24.99, 31.59), new \DateTimeImmutable('2025-01-01'), new \DateTimeImmutable('2025-12-31'), [OccurrenceQuery::TAXON => '4CGXP'], radius: 100, limit: 3))->first()->keys(), $lion->keys(), 'a page holds what the record holds');
+        self::assertSame('gbif.occurrence:5007681734', $this->source()->entity('https://www.gbif.org/occurrence/5007681734')?->id->key());
+        self::assertNull($this->source()->entity(Identifier::of(Scheme::GBIF_OCCURRENCE, '1')), 'unknown');
+    }
+
+    public function testASpecimenDatedByTheDay(): void
+    {
+        $page = $this->source()->occurrences(new OccurrenceQuery(filters: [OccurrenceQuery::TAXON => '4CGXP', OccurrenceQuery::KIND => ['preserved_specimen']], limit: 2));
+        $specimen = $page->first();
+
+        self::assertSame([317, 'preserved specimen', 'MSB', 'Panthera leo'], [$page->total, $specimen->value('basis_of_record'), $specimen->value('institution_code'), $specimen->value('taxon_name')]);
+        self::assertSame(['2023-02-22', '2023-02-22T00:00:00+00:00'], [$specimen->value('event_date'), $specimen->time->format(\DATE_ATOM)], 'a day without a time: its midnight, UTC');
+        self::assertStringContainsString('&basisOfRecord=PRESERVED_SPECIMEN&', $this->urls[0]);
+    }
+
+    public function testWhatOccurrencesRefuseBeforeAnyCall(): void
+    {
+        $refused = [
+            'a sort: GBIF has none' => [new OccurrenceQuery(sort: OccurrenceQuery::NEWEST), NotSupportedException::class],
+            'a filter of another domain' => [new OccurrenceQuery(filters: [OccurrenceQuery::MIN_MAGNITUDE => 4]), NotSupportedException::class],
+            'a taxon of another base' => [new OccurrenceQuery(filters: [OccurrenceQuery::TAXON => Identifier::of(Scheme::NCBI_TAXON, '9689')]), NotSupportedException::class],
+            'a country of three letters' => [new OccurrenceQuery(filters: [OccurrenceQuery::COUNTRY => 'ZAF']), \InvalidArgumentException::class],
+            'past GBIF\'s 100,000' => [new OccurrenceQuery(cursor: '100000'), NotSupportedException::class],
+        ];
+        foreach ($refused as $what => [$query, $exception]) {
+            try {
+                $this->source()->occurrences($query);
+                self::fail($what);
+            } catch (\Exception $e) {
+                self::assertInstanceOf($exception, $e, $what);
+            }
+        }
+        self::assertSame([], $this->calls);
+        $this->source()->occurrences(new OccurrenceQuery(limit: 300, cursor: '99900'));
+        self::assertStringContainsString('&limit=100&offset=99900', $this->urls[0], 'the last page GBIF answers');
+    }
+
     public function testErrorsMapTheSameWayAsEverySource(): void
     {
         try {
@@ -192,7 +305,7 @@ final class GbifSourceTest extends TestCase
 
     public function testWhatItCanDo(): void
     {
-        self::assertSame([Capability::ENTITY, Capability::SEARCH, Capability::CROSS_REFERENCES], $this->source()->capabilities());
+        self::assertSame([Capability::ENTITY, Capability::SEARCH, Capability::OCCURRENCES, Capability::AREA, Capability::CROSS_REFERENCES], $this->source()->capabilities());
         $this->expectException(NotSupportedException::class);
         $this->source()->series(new SeriesQuery(['temperature_2m'], new Point(48.57, 7.75)));
     }

@@ -1,0 +1,45 @@
+{
+    "name": "omnilab/gbif",
+    "type": "library",
+    "description": "Omnilab GBIF: a taxon of GBIF's taxonomy (the Catalogue of Life eXtended Release since June 2026) by its key, its legacy GBIF Backbone number, its NCBI Taxonomy id or a scientific name GBIF matches - its name, authority, rank, status, IUCN Red List category, common name, publication and classification, its legacy number and NCBI id as cross-references, its parent as a related thing - and a search, through the GBIF API, no key needed.",
+    "keywords": [
+        "science",
+        "biodiversity",
+        "taxonomy",
+        "gbif",
+        "species",
+        "catalogue-of-life",
+        "omnilab"
+    ],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Marco Meyer",
+            "email": "marco.meyer@glitchr.io"
+        }
+    ],
+    "require": {
+        "php": ">=8.2",
+        "glitchr/omnilab": "^1.0@dev",
+        "symfony/http-client": "^6.4|^7.0|^8.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Omnilab\\Gbif\\": ""
+        },
+        "exclude-from-classmap": [
+            "/Tests/"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Omnilab\\Gbif\\Tests\\": "Tests/"
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

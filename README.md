@@ -1,6 +1,6 @@
 # omnilab/gbif
 
-GBIF's taxonomy for [omniscient/omnilab](https://github.com/glitchr-studio/omnilab): a taxon by its
+GBIF's taxonomy for [omnisense/omnilab](https://github.com/glitchr-omnisense/omnilab): a taxon by its
 key, by its legacy GBIF Backbone number, by its NCBI Taxonomy id or by a scientific name GBIF
 matches; its name, authority, rank, taxonomic status, IUCN Red List category, common name, place
 of publication and classification; its legacy number and its NCBI id as cross-references for the

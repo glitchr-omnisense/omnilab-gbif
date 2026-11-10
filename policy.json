@@ -1,0 +1,40 @@
+{
+    "$schema": "https://github.com/glitchr-omnisense/contracts/blob/1.x/resources/usage-policy.schema.json",
+    "provider": "gbif",
+    "rateLimits": null,
+    "concurrency": null,
+    "rights": {
+        "commercial": "unknown",
+        "openSourceRequired": null,
+        "caching": {
+            "permission": "allowed",
+            "maxTtl": null
+        },
+        "storage": "allowed",
+        "redistribution": "allowed",
+        "attribution": {
+            "required": true,
+            "text": "GBIF.org, with the DOI of each dataset or download used",
+            "url": "https://www.gbif.org/citation-guidelines",
+            "where": [
+                "source"
+            ]
+        },
+        "licence": "Per dataset: CC0-1.0, CC-BY-4.0 or CC-BY-NC-4.0"
+    },
+    "requirements": {
+        "key": false,
+        "userAgent": {
+            "required": false,
+            "pattern": null
+        }
+    },
+    "provenance": {
+        "terms": "https://www.gbif.org/terms/data-user",
+        "policy": "https://techdocs.gbif.org/en/openapi/",
+        "verifiedAt": "2026-11-10",
+        "declaredBy": "maintainer",
+        "contact": "helpdesk@gbif.org",
+        "notes": "API reference (techdocs.gbif.org/en/openapi) read live 2026-11-10: no fixed rate; \"Rapid or numerous queries to search APIs may be rate limited, depending on our server load\" with HTTP 429 (reduce the rate or use the download API); \"we do not guarantee any particular query rate will work\". GBIF \"highly recommend[s]\" a User-Agent holding a URL or e-mail address so it can contact the integrator (recommended, not required; this package puts its mailto there). No rate-limit headers on a test call. www.gbif.org answered 403 to automated reads; the Data User Agreement and the licensing terms were read in Wayback snapshots (2026-07-24, 2026-08-31): each occurrence dataset carries one of CC0 1.0, CC BY 4.0 or CC BY-NC 4.0, chosen by its publisher, and the publisher's licence prevails; commercial use is therefore per record (forbidden for CC BY-NC records) and unknown at source level; users must publicly acknowledge the data publishers, where appropriate by the DOI of the datasets/downloads, and keep the ownership identifier with every record shared onward; APIs must not be used to disrupt the service. The per-record licence is in each answer (license)."
+    }
+}

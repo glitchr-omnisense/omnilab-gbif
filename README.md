@@ -53,6 +53,34 @@ With NCBI and Wikidata configured too, the `Collector` follows a species from on
 it, and Wikidata by its GBIF key (P14607) or, for an item that has none yet, its legacy number
 (P846).
 
+## Install and a first call
+
+```sh
+composer require omnilab/gbif
+```
+
+A real call, with no account and no key: the lion in GBIF's taxonomy. `mailto` is your address, sent
+in the User-Agent so that the service can reach you before it blocks a caller; the source keeps to
+the limits its [`policy.json`](policy.json) declares.
+
+```php
+<?php
+
+require __DIR__.'/vendor/autoload.php';
+
+use Omnilab\Gbif\GbifSourceFactory;
+
+$gbif = (new GbifSourceFactory())->create(['mailto' => 'you@example.org']);   // your address, in the User-Agent
+$lion = $gbif->entity('4CGXP');
+echo $lion->label, ', ', $lion->value('family'), ', ', $lion->value('iucn_status'), "\n";
+```
+
+Its output on 2026-11-13:
+
+```
+Panthera leo, Felidae, Vulnerable (VU)
+```
+
 ## Terms of use
 
 GBIF's API is free and needs no key; GBIF asks a client to name itself in its User-Agent (a URL or
